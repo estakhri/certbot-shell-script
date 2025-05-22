@@ -4,6 +4,11 @@
 
 set -e
 
+if [ "$EUID" -ne 0 ]; then
+  echo "❌ Please run as root: sudo $0 ..."
+  exit 1
+fi
+
 # Check arguments
 if [ "$#" -lt 2 ]; then
   echo "Usage: sudo $0 [nginx|apache|general] yourdomain.com [www.yourdomain.com]"
@@ -21,24 +26,35 @@ for d in "${DOMAINS[@]}"; do
   DOMAIN_ARGS="$DOMAIN_ARGS -d $d"
 done
 
-# Install certbot and plugin
+# Install certbot and plugin if needed
 install_certbot() {
-  echo "Installing Certbot and required plugins..."
-  apt update
-  apt install -y software-properties-common
-  add-apt-repository universe -y
-  apt update
+  if ! command -v certbot >/dev/null 2>&1; then
+    echo "⚙️ Certbot not found, installing..."
+    apt update
+    apt install -y software-properties-common
+    add-apt-repository universe -y
+    apt update
+    apt install -y certbot
+  else
+    echo "✅ Certbot is already installed."
+  fi
 
-  apt install -y certbot
   case $SERVER_TYPE in
     nginx)
-      apt install -y python3-certbot-nginx
+      if ! dpkg -l | grep -q python3-certbot-nginx; then
+        echo "Installing nginx plugin..."
+        apt install -y python3-certbot-nginx
+      fi
       ;;
     apache)
-      apt install -y python3-certbot-apache
+      if ! dpkg -l | grep -q python3-certbot-apache; then
+        echo "Installing apache plugin..."
+        apt install -y python3-certbot-apache
+      fi
       ;;
   esac
 }
+
 
 # Generate certificate
 generate_cert() {
